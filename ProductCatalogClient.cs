@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Text.Json;
 using ShoppingCart.ShoppingCart;
 
 namespace ShoppingCart
@@ -34,9 +35,34 @@ namespace ShoppingCart
             this.client.GetAsync(productsResource);
         }
 
-        public Task<IEnumerable<ShoppingCartItem>> GetShoppingCartItems(int[] productCatalogueIds)
+        private async Task<IEnumerable<ShoppingCartItem>> ConvertToShoppingCartItems(HttpResponseMessage response)
         {
-            throw new NotImplementedException();
+            response.EnsureSuccessStatusCode();
+            var products = await
+            JsonSerializer.DeserializeAsync<List<ProductCatalogProduct>>(
+                await response.Content.ReadAsStreamAsync(),
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+
+            return products
+                .Select(p =>
+                    new ShoppingCartItem(
+                    p.ProductId,
+                    p.ProductName,
+                    p.ProductDescription,
+                    p.Price
+                ));
         }
+        public async Task<IEnumerable<ShoppingCartItem>> GetShoppingCartItems(int[] productCatalogIds)
+        {
+            using var response = await RequestProductFromProductCatalog(productCatalogIds);
+            return await ConvertToShoppingCartItems(response);
+        }
+        
+        private record ProductCatalogProduct(
+            int ProductId,
+            string ProductName,
+            string ProductDescription,
+            Money Price);    
     }
 }
+
